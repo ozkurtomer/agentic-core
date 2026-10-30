@@ -45,38 +45,44 @@ config = types.GenerateContentConfig(
     tools=[araclar],
 )
 
+soru = input("Soru: ")
+
 gecmis = [
-    types.Content(role="user", parts=[types.Part(text="1234 ile 5678'i çarpar mısın?")])
+    types.Content(role="user", parts=[types.Part(text=soru)])
 ]
 
-response = client.models.generate_content(
-    model=MODEL,
-    contents=gecmis,
-    config=config,
-)
+sayac = 0
+bitti = False
 
-cagri = response.function_calls[0]
-print("Model şunu istiyor:", cagri.name, cagri.args)
+while sayac < 10:
+    sayac += 1
 
-sonuc = hesapla(**cagri.args)
-print("Aracın sonucu:", sonuc)
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=gecmis,
+        config=config,
+    )
 
-gecmis.append(response.candidates[0].content)
+    gecmis.append(response.candidates[0].content)
 
-gecmis.append(
-    types.Content(
-        role="user",
-        parts=[types.Part.from_function_response(
+    if not response.function_calls:
+        print("Final cevap:", response.text)
+        bitti = True
+        break
+
+    parcalar = []
+    for cagri in response.function_calls:
+        print(f"[Adım {sayac}] Araç: {cagri.name} {cagri.args}")
+        sonuc = hesapla(**cagri.args)
+        print(f"[Adım {sayac}] Sonuç: {sonuc}")
+
+        parcalar.append(types.Part.from_function_response(
             name=cagri.name,
             response={"sonuc": sonuc},
-        )],
-    )
-)
+        ))
 
-response2 = client.models.generate_content(
-    model=MODEL,
-    contents=gecmis,
-    config=config,
-)
+    gecmis.append(types.Content(role="user", parts=parcalar))
 
-print("Final cevap:", response2.text)
+if not bitti:
+    print("Uyarı: Adım limitine ulaşıldı, ajan görevi tamamlayamadı.")
+    
