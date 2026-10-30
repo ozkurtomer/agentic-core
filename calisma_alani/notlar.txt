@@ -1,0 +1,3 @@
+Pazartesi: Kredi modülü code review
+Salı: Sprint planlama
+Çarşamba: Prod deploy

@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from pathlib import Path
 
 load_dotenv()
 client = genai.Client()
@@ -20,9 +21,35 @@ def hesapla(a, b, islem):
     else:
         return f"Hata: Bilinmeyen işlem '{islem}'"
 
+CALISMA_ALANI = Path("calisma_alani").resolve()
+
+def dosya_oku(yol):
+    tam_yol = Path(yol).resolve()
+
+    if not tam_yol.is_relative_to(CALISMA_ALANI):
+        return "Hata: Sadece calisma_alani klasöründeki dosyalar okunabilir."
+
+    if not tam_yol.is_file():
+        return f"Hata: '{yol}' adında bir dosya bulunamadı."
+
+    return tam_yol.read_text(encoding="utf-8")
+
+ARACLAR = {
+    "hesapla": hesapla,
+    "dosya_oku": dosya_oku,
+}
+
+def araci_calistir(ad, parametreler):
+    if ad not in ARACLAR:
+        return f"Hata: '{ad}' adında bir araç yok."
+    try:
+        return ARACLAR[ad](**parametreler)
+    except Exception as hata:
+        return f"Hata: Araç çalışırken sorun çıktı: {hata}"
+    
 hesapla_tanimi = types.FunctionDeclaration(
     name="hesapla",
-    description="İki sayı üzerinde dört işlemden birini yapar. Kullanıcı bir hesaplama istediğinde kendin hesaplamak yerine her zaman bu aracı kullan.",
+    description="İki sayı üzerinde toplama, çıkarma, çarpma veya bölme işlemi yapar. Bu dört işlemden birini gerektiren hesaplamalarda kendin hesaplamak yerine bu aracı kullan.",
     parameters=types.Schema(
         type="OBJECT",
         properties={
@@ -38,10 +65,22 @@ hesapla_tanimi = types.FunctionDeclaration(
     ),
 )
 
-araclar = types.Tool(function_declarations=[hesapla_tanimi])
+dosya_oku_tanimi = types.FunctionDeclaration(
+    name="dosya_oku",
+    description="Çalışma alanındaki bir metin dosyasının içeriğini okur. Dosyalar 'calisma_alani' klasöründedir.",
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={
+            "yol": types.Schema(type="STRING", description="Okunacak dosyanın yolu, örneğin calisma_alani/notlar.txt"),
+        },
+        required=["yol"],
+    ),
+)
+
+araclar = types.Tool(function_declarations=[hesapla_tanimi, dosya_oku_tanimi])
 
 config = types.GenerateContentConfig(
-    system_instruction="Sen yardımcı bir asistansın.",
+    system_instruction="Sen yardımcı bir asistansın. Cevaplarında Markdown veya LaTeX kullanma, sadece düz metin yaz.",
     tools=[araclar],
 )
 
@@ -73,7 +112,7 @@ while sayac < 10:
     parcalar = []
     for cagri in response.function_calls:
         print(f"[Adım {sayac}] Araç: {cagri.name} {cagri.args}")
-        sonuc = hesapla(**cagri.args)
+        sonuc = araci_calistir(cagri.name, cagri.args)
         print(f"[Adım {sayac}] Sonuç: {sonuc}")
 
         parcalar.append(types.Part.from_function_response(
@@ -85,4 +124,3 @@ while sayac < 10:
 
 if not bitti:
     print("Uyarı: Adım limitine ulaşıldı, ajan görevi tamamlayamadı.")
-    
