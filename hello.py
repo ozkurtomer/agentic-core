@@ -22,6 +22,9 @@ while True:
     response = client.models.generate_content(
         model=MODEL,
         contents=gecmis,
+        config=types.GenerateContentConfig(
+            system_instruction="Sen kısa ve öz cevap veren bir yazılım asistanısın. Cevapların en fazla 3 cümle olsun.",
+        )
     )
 
     gecmis.append(response.candidates[0].content)
