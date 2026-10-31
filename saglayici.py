@@ -1,5 +1,8 @@
 from dataclasses import dataclass, field
 from google.genai import types
+from google.genai import errors
+
+import time
 
 @dataclass
 class AracCagrisi:
@@ -53,3 +56,32 @@ def mesajlari_gemini_formatina_cevir(mesajlar):
             icerikler.append(types.Content(role="user", parts=parcalar))
 
     return icerikler
+
+GECICI_HATALAR = [429, 503]
+
+
+class GeminiSaglayici:
+    def __init__(self, client, model, config):
+        self.client = client
+        self.model = model
+        self.config = config
+
+    def cevap_uret(self, mesajlar, deneme_limiti=4):
+        icerikler = mesajlari_gemini_formatina_cevir(mesajlar)
+        bekleme = 1
+
+        for deneme in range(1, deneme_limiti + 1):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=icerikler,
+                    config=self.config,
+                )
+                return gemini_cevabini_cevir(response)
+            except errors.APIError as e:
+                if e.code not in GECICI_HATALAR or deneme == deneme_limiti:
+                    raise
+
+                print(f"Uyarı: API çağrısı başarısız oldu (durum kodu {e.code}). {bekleme} saniye bekleniyor...")
+                time.sleep(bekleme)
+                bekleme *= 2
