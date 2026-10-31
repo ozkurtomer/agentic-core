@@ -32,8 +32,7 @@ cevap = ollama.chat(
 )
 
 print(cevap)
-print("---")
-print(cevap.message.tool_calls)
+
 if cevap.message.tool_calls:
     istek = cevap.message.tool_calls[0]
     print(type(istek.function.arguments["a"]))
