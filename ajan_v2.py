@@ -8,7 +8,7 @@ import time
 
 load_dotenv()
 client = genai.Client()
-MODEL = "gemini-3.1-flash-lite"
+MODEL = "gemini-3.5-flash-lite"
 
 GECICI_HATALAR = [429, 503]
 
@@ -64,6 +64,36 @@ def modeli_cagir(gecmis, deneme_limiti=4):
             time.sleep(bekleme)
             bekleme *= 2
 
+def ajani_calistir(soru, adim_limiti=1):
+
+    gecmis = [
+        types.Content(role="user", parts=[types.Part(text=soru)])
+    ]
+
+    for adim in range(1, adim_limiti + 1):
+        response = modeli_cagir(gecmis)
+
+        gecmis.append(response.candidates[0].content)
+
+        if not response.function_calls:
+            return response.text
+
+        parcalar = []
+
+        for cagri in response.function_calls:
+            print(f"[Adım {adim}] Araç: {cagri.name} {cagri.args}")
+            sonuc = araci_calistir(cagri.name, cagri.args)
+            print(f"[Adım {adim}] Sonuç: {sonuc}")
+        
+            parcalar.append(types.Part.from_function_response(
+                name=cagri.name,
+                response={"sonuc": sonuc},
+            ))
+
+        gecmis.append(types.Content(role="user", parts=parcalar))
+
+    return "Uyarı: Adım limitine ulaşıldı, ajan görevi tamamlayamadı."
+
 CALISMA_ALANI = Path("calisma_alani").resolve()
 
 ARACLAR = {
@@ -114,37 +144,8 @@ config = types.GenerateContentConfig(
 
 soru = input("Soru: ")
 
-gecmis = [
-    types.Content(role="user", parts=[types.Part(text=soru)])
-]
-
-sayac = 0
-bitti = False
-
-while sayac < 10:
-    sayac += 1
-
-    response = modeli_cagir(gecmis)
-
-    gecmis.append(response.candidates[0].content)
-
-    if not response.function_calls:
-        print("Final cevap:", response.text)
-        bitti = True
-        break
-
-    parcalar = []
-    for cagri in response.function_calls:
-        print(f"[Adım {sayac}] Araç: {cagri.name} {cagri.args}")
-        sonuc = araci_calistir(cagri.name, cagri.args)
-        print(f"[Adım {sayac}] Sonuç: {sonuc}")
-
-        parcalar.append(types.Part.from_function_response(
-            name=cagri.name,
-            response={"sonuc": sonuc},
-        ))
-
-    gecmis.append(types.Content(role="user", parts=parcalar))
-
-if not bitti:
-    print("Uyarı: Adım limitine ulaşıldı, ajan görevi tamamlayamadı.")
+try:
+    print(ajani_calistir(soru))
+except errors.APIError as e:
+    print(f"API hatası: {e.code} - {e.message}")
+    pass
