@@ -31,6 +31,43 @@ def gemini_cevabini_cevir(response):
         ham=response.candidates[0].content,
     )
 
+def ollama_cevabini_cevir(cevap):
+    arac_cagrilari = []
+
+    if cevap.message.tool_calls:
+        for tool_call in cevap.message.tool_calls:
+            arac_cagrilari.append(AracCagrisi(
+                ad=tool_call.function.name,
+                parametreler=tool_call.function.arguments,
+
+            ))
+
+    return ModelCevabi(
+        metin=cevap.message.content if not cevap.message.tool_calls else None,
+        arac_cagrilari=arac_cagrilari,
+        ham=cevap.message,)
+
+def mesajlari_ollama_formatina_cevir(mesajlar):
+    sonuc = []
+
+    for mesaj in mesajlar:
+
+        if mesaj["rol"] == "kullanici":
+            sonuc.append({"role": "user", "content": mesaj["metin"]})
+
+        elif mesaj["rol"] == "model":
+            sonuc.append(mesaj["cevap"].ham)
+
+        elif mesaj["rol"] == "arac":
+            for kayit in mesaj["sonuclar"]:
+                sonuc.append({
+                    "role": "tool",
+                    "tool_name": kayit["ad"],
+                    "content": str(kayit["sonuc"]),
+                })
+
+    return sonuc
+
 def mesajlari_gemini_formatina_cevir(mesajlar):
     icerikler = []
 
@@ -58,7 +95,6 @@ def mesajlari_gemini_formatina_cevir(mesajlar):
     return icerikler
 
 GECICI_HATALAR = [429, 503]
-
 
 class GeminiSaglayici:
     def __init__(self, client, model, config):
