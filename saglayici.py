@@ -3,6 +3,7 @@ from google.genai import types
 from google.genai import errors
 
 import time
+import ollama
 
 @dataclass
 class AracCagrisi:
@@ -94,13 +95,39 @@ def mesajlari_gemini_formatina_cevir(mesajlar):
 
     return icerikler
 
+def araclari_gemini_formatina_cevir(tanimlar):
+    bildirimler = []
+    for t in tanimlar:
+        bildirimler.append(types.FunctionDeclaration(
+            name=t["ad"],
+            description=t["aciklama"],
+            parameters_json_schema=t["parametreler"],
+        ))
+    return types.Tool(function_declarations=bildirimler)
+
+def araclari_ollama_formatina_cevir(tanimlar):
+    sonuc = []
+    for t in tanimlar:
+        sonuc.append({
+            "type": "function",
+            "function": {
+                "name": t["ad"],
+                "description": t["aciklama"],
+                "parameters": t["parametreler"],
+            },
+        })
+    return sonuc
+
 GECICI_HATALAR = [429, 503]
 
 class GeminiSaglayici:
-    def __init__(self, client, model, config):
+    def __init__(self, client, model, araclar=None, sistem_talimati=None):
         self.client = client
         self.model = model
-        self.config = config
+        self.config = types.GenerateContentConfig(
+            system_instruction=sistem_talimati,
+            tools=[araclari_gemini_formatina_cevir(araclar)] if araclar else None,
+        )
 
     def cevap_uret(self, mesajlar, deneme_limiti=4):
         icerikler = mesajlari_gemini_formatina_cevir(mesajlar)
@@ -121,3 +148,17 @@ class GeminiSaglayici:
                 print(f"Uyarı: API çağrısı başarısız oldu (durum kodu {e.code}). {bekleme} saniye bekleniyor...")
                 time.sleep(bekleme)
                 bekleme *= 2
+
+class OllamaSaglayici:
+    def __init__(self, model, araclar=None):
+        self.model = model
+        self.araclar = araclari_ollama_formatina_cevir(araclar) if araclar else None
+
+    def cevap_uret(self, mesajlar):
+        ollama_mesajlari = mesajlari_ollama_formatina_cevir(mesajlar)
+        cevap = ollama.chat(
+            model=self.model,
+            messages=ollama_mesajlari,
+            tools=self.araclar,
+        )
+        return ollama_cevabini_cevir(cevap)               
